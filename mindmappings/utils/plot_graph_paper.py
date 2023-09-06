@@ -1,8 +1,9 @@
 import math,os
 import matplotlib
-matplotlib.use('Agg')
+# matplotlib.use('TkAgg')
 # matplotlib.use('ggplot')
 import matplotlib.pyplot as plt
+print(matplotlib.get_backend())
 plt.style.use('seaborn-paper')
 font = {'size' : 32}
 matplotlib.rc('font', **font)
@@ -62,7 +63,8 @@ def plot_graph(plot_x_axis, plot_y_axis, labels, plot_labels=None, plot_titles=N
             # plt.xticks(rotation=50)
 
         if(plot_titles is not None):
-            curr_plot.set_title(plot_titles[i])
+            # curr_plot.set_title(plot_titles[i])
+            curr_plot.set_title(plot_titles)
 
         if(log_yaxis):
             plt.yscale('log',basey=log_base)
@@ -97,9 +99,10 @@ def plot_graph(plot_x_axis, plot_y_axis, labels, plot_labels=None, plot_titles=N
     
 
     # plt.tight_layout()
-    plt.savefig(os.path.join('figures', path, file_name + '.png'), dpi=300)
-    print(os.path.join('figures', path, file_name + '.png'))
-    plt.close()
+    # plt.savefig(os.path.join('figures', path, file_name + '.png'), dpi=300)
+    # print(os.path.join('figures', path, file_name + '.png'))
+    # plt.close()
+    plt.show()
 
 if __name__ == "__main__":
     x0_data = range(1,100)

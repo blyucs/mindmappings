@@ -17,7 +17,10 @@ class Parameters:
 
         # Set a scratch path to write temporary files.
         # Tip: Use a fast memory to speed-up runs.
-        self.SCRATCH = None # SETME
+        # self.SCRATCH = '/home/lvbo/testgen-new/' # hourz None # SETME
+        # self.SCRATCH = '/home/lvbo/testgen-1000w/' # hourz None # SETME
+        # self.SCRATCH = '/home/lvbo/00_code/mindmappings/scratch/' # hourz None # SETME
+        self.SCRATCH = '/home/lvbo/01_dataset/testgen-1000w/' # hourz None # SETME
 
         # Sets the cost metric
         self.COST_METRIC = metric #'energy'/'perf'/'EDP'
@@ -66,17 +69,20 @@ class Parameters:
             sys.exit("Algorithm not supported")
 
         # Average Numbers of runs
-        self.AVG_ITERS = 100
+        self.AVG_ITERS = 2#10#100
+
 
         # Maximum Iterations
-        self.MAXSTEPS = 5000 
+        self.MAXSTEPS = 5#5000#1000 #5000#1000#5000
+
 
         #####################################################################
         #### TIMELOOP CONTROLS ####
         #####################################################################
 
         # Path to executable: Install timeloop and point to the timeloop directory.
-        self.TIMELOOP_PATH = None #SETME
+        # self.TIMELOOP_PATH = '/yu4/lvbo/timeloop' #hourz None #SETME
+        self.TIMELOOP_PATH = '/home/lvbo/timeloop' #hourz None #SETME
 
         # Executable (timeloop-model)
         self.COSTMODEL_EXECUTABLE =  os.path.join(self.TIMELOOP_PATH ,'build/timeloop-model')
@@ -156,12 +162,12 @@ class Parameters:
         if(self.ALGORITHM == 'CNN-layer'):
             self.problems_actual = [ #N C K R S P Q
                         [16, 64,128,3,3,112,112], # VGG_conv2_1
-                        [32, 64,192,3,3,56,56], # Inception_conv2_1x1
-                        [8, 96,256,5,5,27,27],  # AlexNet_conv2
-                        [8, 384,384,3,3,13,13], # AlexNet_conv2
-                        [16,128,128,3,3,28,28], # ResNet_Conv3_0_3x3
-                        [16,256,256,3,3,14,14]] # ResNet_Conv3_0_3x3
-
+                        # [32, 64,192,3,3,56,56], # Inception_conv2_1x1
+                        # [8, 96,256,5,5,27,27],  # AlexNet_conv2
+                        # [8, 384,384,3,3,13,13], # AlexNet_conv2
+                        # [16,128,128,3,3,28,28], # ResNet_Conv3_0_3x3
+                        # [16,256,256,3,3,14,14] # ResNet_Conv3_0_3x3
+                        ]
             self.problem_test = [#N C K R S P Q
                             [16,256,256,3,3,14,14]] # ResNet_Conv3_0_3x3
                             # [8, 96,256,5,5,27,27]] # AlexNet_conv2

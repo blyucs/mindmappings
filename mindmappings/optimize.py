@@ -5,16 +5,20 @@ import sys
 import shutil
 from copy import deepcopy
 import numpy as np
-
+import logging
+import time
+import glob
 from mindmappings.parameters import Parameters
 from mindmappings.utils.plot_graph import plot_graph
-from mindmappings.utils.utils import non_increasing
+from mindmappings.utils.utils import *
 from mindmappings.utils.parallelProcess import parallelProcess
 from mindmappings.gradSearch.dataGen.dataGen import DataGen
 from mindmappings.gradSearch.dataGen.dataProcess import DataProcess
 from mindmappings.gradSearch.train.train_surrogate import TrainSurrogate
 from mindmappings.gradSearch.search.search import Tuner
-
+from plt_new import plot_result
+# os.environ["CUDA_VISIBLE_DEVICES"]="7"
+from torch.utils.tensorboard import SummaryWriter
 # Unpacker
 def search_unpack(args):
     kwargs, obj = args
@@ -25,6 +29,19 @@ def main(args):
 
     # Set the algorithm
     parameters = Parameters(args.algorithm)
+
+    # set log
+    # args.save = '{}/timeloop/EXP/{}-{}'.format(parameters.SCRATCH, time.strftime("%Y%m%d-%H%M%S"), args.command)
+    args.save = './EXP/{}-{}-ori'.format(time.strftime("%Y%m%d-%H%M%S"), args.command)
+    # create_exp_dir(args.save, scripts_to_save=glob.glob('**/*.py', recursive=True))
+    create_exp_dir(args.save, scripts_to_save=glob.glob('mindmappings/**/*.py', recursive=True))
+
+    log_format = '%(asctime)s %(message)s'
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                        format=log_format, datefmt='%m/%d %I:%M:%S %p')
+    fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
+    fh.setFormatter(logging.Formatter(log_format))
+    logging.getLogger().addHandler(fh)
 
     # Choose the cost model
     if(args.costmodel == 'example'):
@@ -77,7 +94,7 @@ def main(args):
     # Search
     elif(args.command == 'search'):
         costmodel = Model(problem=args.problem, algorithm=args.algorithm, parameters=parameters)
-        tuner = Tuner(costmodel, parameters=parameters, dataset_path=None, saved_model_path=args.path)
+        tuner = Tuner(costmodel, parameters=parameters, dataset_path=None, saved_model_path=args.path, save_path = args.save)
         tuner.search(maxsteps=args.maxsteps)
 
     # Benchmark time per step
@@ -97,15 +114,14 @@ def main(args):
                 .format(args.algorithm,parameters.problems))
 
         # Create the output directory
-        if(not os.path.exists(parameters.GSEARCH_OUTPATH)):
-            os.mkdir(parameters.GSEARCH_OUTPATH)
-        outfile = parameters.GSEARCH_OUTPATH + 'dataGSearch_isoiter_' + str(parameters.ALGORITHM) + '.npy'
+        reproduce_dir = args.save + "/reproduce_result/"
+        if(not os.path.exists(reproduce_dir)):
+            os.mkdir(reproduce_dir)
+
+        outfile = reproduce_dir + str(parameters.ALGORITHM) + '_' + str(parameters.AVG_ITERS)  + '_iter_' + str(parameters.MAXSTEPS) + '_steps_'+ 'dataGSearch_isoiter' + '.npy'
         print("Writing to ", outfile)
 
         # Placeholders
-        average_cost = []
-        standard_deviation = []
-        oracle_costs = []
         work = []
         # Average Number of runs
         n = parameters.GSEARCH_AVG_ITERS
@@ -115,7 +131,7 @@ def main(args):
             # Instantiate the cost model
             costmodel = deepcopy(Model(problem=args.problem, algorithm=args.algorithm, parameters=parameters))
             # Instantiate Tuner
-            tuner = deepcopy(Tuner(costmodel, parameters=parameters, dataset_path=None, saved_model_path=args.path))
+            tuner = deepcopy(Tuner(costmodel, parameters=parameters, dataset_path=None, saved_model_path=args.path, save_path=args.save))
             # Arguments for every call
             work_problem = [({'threadID':str(pid*n+i), 'maxsteps':parameters.GSEARCH_MAXSTEPS, 'reproduce':True}, tuner) for i in range(n)]
             # Add them to main work
@@ -124,20 +140,48 @@ def main(args):
         # Total Amount of threads
         print("We will launch {0} total threads.".format(len(work)))
         # Launch them in parallel (uses maximum available cores/GPU)
-        costArr = parallelProcess(search_unpack, work, num_cores=8)
+        # [best_cost_array, cur_cost_array] = parallelProcess(search_unpack, work, num_cores=8)
+        para_array= parallelProcess(search_unpack, work, num_cores=20)
+        best_cost_array = np.array(para_array)[:,0,:]
+        cur_cost_array =  np.array(para_array)[:,1,:]
 
         # Slice the results and average it out.
-        average_cost = [np.minimum.accumulate(np.mean(costArr[i:i+n], axis=0)) for i in range(0, len(costArr), n)]
-        standard_deviation = [np.minimum.accumulate(np.std(costArr[i:i+n], axis=0)) for i in range(0, len(costArr), n)]
+        average_best_cost = np.mean(best_cost_array, axis=0)
+        average_cur_cost = np.mean(cur_cost_array, axis=0)
+        best_standard_deviation = np.std(best_cost_array, axis=0)
+        cur_standard_deviation = np.std(cur_cost_array, axis=0)
+        # processed_average_cost = np.minimum.accumulate(average_cost)
+        # processed_standard_deviation = np.minimum.accumulate(standard_deviation)
 
         # Ratio w.r.t. oracle
         # average_cost = [p/oracle_costs[idx] for idx,p in enumerate(average_cost)]
 
         # Dump the data into a npy
-        np.save(outfile, [average_cost, standard_deviation])
-
+        # np.save(outfile, [average_cost, standard_deviation])
+        # np.save(outfile, [costArr, average_cost, standard_deviation, processed_average_cost, processed_standard_deviation])
+        np.save(outfile, [best_cost_array, cur_cost_array, average_best_cost, average_cur_cost, best_standard_deviation, cur_standard_deviation ])
+        for i in range(len(cur_cost_array)):
+            text = "VGG_Conv_2_" + str(i)
+            plot_result(cur_cost_array[i], title= text, dir = reproduce_dir)
+        plot_result(average_best_cost, title="average best", dir = reproduce_dir)
+        plot_result(average_cur_cost, title="average cur", dir = reproduce_dir)
+        # plot_result(processed_average_cost, title="processed_average", dir = reproduce_dir)
         print("Iso-iteration Runs Completed. Results written to {0}".format(parameters.GSEARCH_OUTPATH))
 
+        average_best_cost_writer = SummaryWriter(log_dir='{}/tb/average_best_cost'.format(args.save))
+        average_cur_cost_writer = SummaryWriter(log_dir='{}/tb/average_cur_cost'.format(args.save))
+        average_best_std_writer = SummaryWriter(log_dir='{}/tb/average_best_std'.format(args.save))
+        average_cur_std_writer = SummaryWriter(log_dir='{}/tb/average_cur_std'.format(args.save))
+
+        for i in range(len(average_best_cost)):
+            average_best_cost_writer.add_scalar('opt/average_best_cost', average_best_cost[i], i)
+            average_cur_cost_writer.add_scalar('opt/average_cur_cost', average_cur_cost[i], i)
+            average_best_std_writer.add_scalar('opt/average_best_std', best_standard_deviation[i], i)
+            average_cur_std_writer.add_scalar('opt/average_cur_std', cur_standard_deviation[i], i)
+        average_best_cost_writer.close()
+        average_cur_cost_writer.close()
+        average_best_std_writer.close()
+        average_cur_std_writer.close()
     else:
         sys.exit("Command Not understood.")
 

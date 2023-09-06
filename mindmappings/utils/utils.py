@@ -3,7 +3,10 @@
 """
 import math
 from functools import reduce
-
+import os
+import shutil
+import numpy as np
+import logging
 def factors(n):
     """
         Returns factors of n.
@@ -63,3 +66,35 @@ def getReuseVector(loopOrder, iterVector):
         reuseVector[idx] = iterVector[lord]
 
     return reuseVector
+def create_exp_dir(path, scripts_to_save=None):
+  if not os.path.exists(path):
+    os.mkdir(path)
+  print('Experiment dir : {}'.format(path))
+
+  if scripts_to_save is not None:
+    os.mkdir(os.path.join(path, 'scripts'))
+    for script in scripts_to_save:
+      dst_file = os.path.join(path, 'scripts', os.path.basename(script))
+      shutil.copyfile(script, dst_file)
+
+
+class AvgrageMeter(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.avg = 0
+        self.sum = 0
+        self.cnt = 0
+
+    def update(self, val, n=1):
+        self.sum += val * n
+        self.cnt += n
+        self.avg = self.sum / self.cnt
+def edp_softmax(x):
+    """ softmax function """
+    # mean, std = np.array(x).mean(), np.array(x).std()
+    # y = (x - mean) / std
+    # s = np.exp(y) / np.sum(np.exp(y))
+    s = np.exp(x) / np.sum(np.exp(x))
+    return s
