@@ -69,11 +69,11 @@ class Parameters:
             sys.exit("Algorithm not supported")
 
         # Average Numbers of runs
-        self.AVG_ITERS = 2#10#100
+        self.AVG_ITERS = 5#10#100 test
 
 
         # Maximum Iterations
-        self.MAXSTEPS = 5#5000#1000 #5000#1000#5000
+        self.MAXSTEPS = 5000#1000 #5000#1000#5000
 
 
         #####################################################################
@@ -127,7 +127,7 @@ class Parameters:
         ## Train
         self.SURROGATE_TRAIN_EPOCHS = 100
         self.SURROGATE_TRAIN_BATCHSIZE = 256
-        self.SURROGATE_TRAIN_LR = 1e-2
+        self.SURROGATE_TRAIN_LR = 1e-2 #1#10#1e-2
 
         # Search Parameters
 

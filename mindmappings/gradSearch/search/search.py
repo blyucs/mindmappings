@@ -37,8 +37,9 @@ class Tuner:
                 set_start_method('spawn', force=True)
             except:
                 pass
-        print('Using device: {}'.format( self.device))
-        
+        logging.info('Using device: {}'.format( self.device))
+        logging.info('Search problem : {}'.format(str(self.costmodel.problem)))
+
     ################################# <HELPER FUNCTIONS> #################################
     def getTensor(self, var, grad=False):
         return torch.Tensor([var], requires_grad=grad)
@@ -72,9 +73,9 @@ class Tuner:
             benchmarking: Set to True if benchmarking time (to avoid querying actual cost model)
         """
 
-        # search_cur_cost_writer = SummaryWriter(log_dir='{}/tb/cur_cost'.format(self.save_path))
-        # search_best_cost_writer = SummaryWriter(log_dir='{}/tb/best_cost'.format(self.save_path))
-        # search_loss_writer = SummaryWriter(log_dir='{}/tb/loss'.format(self.save_path))
+        search_cur_cost_writer = SummaryWriter(log_dir='{}/tb/cur_cost'.format(self.save_path))
+        search_best_cost_writer = SummaryWriter(log_dir='{}/tb/best_cost'.format(self.save_path))
+        search_loss_writer = SummaryWriter(log_dir='{}/tb/loss'.format(self.save_path))
 
         net = Net(self.parameters.INPUT_VEC_LEN, self.parameters.OUTPUT_VEC_LEN).cuda() if(self.device=='GPU') \
                 else Net(self.parameters.INPUT_VEC_LEN, self.parameters.OUTPUT_VEC_LEN)
@@ -84,7 +85,7 @@ class Tuner:
         # Load the pre-trained model
         saved_model = os.path.join(self.saved_model_path, self.parameters.TRAINED_MODEL)
         if(os.path.isfile(saved_model)):
-            print("Loading Saved Model")
+            print("Loading Saved Model {}".format(saved_model))
             if(self.device == 'GPU'):
                 net.load_state_dict(torch.load(saved_model))
             else:
@@ -206,7 +207,7 @@ class Tuner:
 
                 # Udpate the result Menu
                 gradient_steps = 0
-                iterations += 1
+                # iterations += 1
 
                 # If you are not running this to reproduce results, these can go away.
                 # Wish there was a preprocessor, sigh.
@@ -218,10 +219,10 @@ class Tuner:
                 #     benchmark_time_series.append(time.time()-start_time)
                 #     start_time = time.time()
                 # Prints for debug
-                # print("Accepted the new random mapping")
-                # print("Updated Mapping: {0}".format(new_mapping))
+                print("Accepted the new random mapping")
+                print("Updated Mapping: {0}".format(new_mapping))
                 # print("New cost: {0}, predicted cost: {1}".format(reference_cost/oracle_cost, cost))
-                continue
+                # continue
 
             ######################## GRADIENT DESCENT ########################
             # Otherwise perform gradient descent
@@ -276,21 +277,23 @@ class Tuner:
             loss = out.sum()
 
             #### ****** DEBUG. ***** ####
-            next_cost = searchutils.getCost(out.data.cpu().numpy(), metric=self.parameters.COST_METRIC)
+            # next_cost = searchutils.getCost(out.data.cpu().numpy(), metric=self.parameters.COST_METRIC)
             # Update the best costs
-            best_cost = next_cost if(next_cost < best_cost) else best_cost
-            best_mapping = projected_mapping if(next_cost < best_cost) else best_mapping
+            # best_cost = next_cost if(next_cost < best_cost) else best_cost
+            # best_mapping = projected_mapping if(next_cost < best_cost) else best_mapping
             # To get the actual cost (to report the results), perform a projection to the valid map space
-            reference_cost = self.costmodel.costFn(projected_mapping, metric=self.parameters.COST_METRIC, threadID=threadID)[0]/oracle_cost if(success) else np.inf
+            # next_cost = self.costmodel.costFn(projected_mapping, metric=self.parameters.COST_METRIC, threadID=threadID)[0]/oracle_cost if(success) else np.inf
+            # best_cost = next_cost if(next_cost < best_cost) else best_cost
             # Display the results for DEBUG
             # print("Current Mapping: {0}".format(prev_mapping))
             print("Current Mapping: {0}".format(projected_mapping))
             # # # print("Predicted Cost: {0}, Previous Cost: {1}".format(next_cost, cost))
             # print("Cur Cost: {:.5f}, Best Cost yet: {:.5f}, Oracle Cost: {:.7f}".format(next_cost, best_cost, oracle_cost))
             print("Learning Rate: {0}, steps_to_move: {1}, loss: {2}".format(alpha, steps_to_move, loss.item()))
-            # search_cur_cost_writer.add_scalar('Search/cur_cost', next_cost, iterations)
-            # search_best_cost_writer.add_scalar('Search/best_cost', best_cost, iterations)
-            # search_loss_writer.add_scalar('Search/loss', loss.item(), iterations)
+            if not reproduce:
+                # search_cur_cost_writer.add_scalar('Search/cur_cost', next_cost, iterations)
+                search_best_cost_writer.add_scalar('Search/best_cost', best_cost, iterations)
+                search_loss_writer.add_scalar('Search/loss', loss.item(), iterations)
 
             #### ****** 5. Decision to change the learning rate. ***** ####
 
@@ -308,7 +311,7 @@ class Tuner:
                     prev_mapping = projected_mapping
                     best_mapping = projected_mapping
             else:
-                cost = next_cost
+                # cost = next_cost
                 prev_mapping = projected_mapping
 
             # result.append(min(min(result), reference_cost))
@@ -351,6 +354,69 @@ class Tuner:
                   "{3}\n\nPredicted Cost({4}/Oracle): {5}\n".format(self.parameters.ALGORITHM, self.costmodel.problem, maxsteps, best_mapping,
                  self.parameters.COST_METRIC, best_cost))
             return best_mapping, best_cost
+    def random_search(self, learning_rate=None, threadID='0', maxsteps=5000, injection_interval=None, mode=None, clamp=None, benchmarking=False, reproduce=False):
+        """
+            Search function.
+
+            Inputs
+            ----------------
+            learning_rate: Set the learning rate
+            threadID: Give a unique ID, if running in parallel
+            maxsteps: Number of steps to run
+            injection_interval: Interval to inject randomness
+            mode:
+            clamp:
+            benchmarking: Set to True if benchmarking time (to avoid querying actual cost model)
+        """
+
+        search_cur_cost_writer = SummaryWriter(log_dir='{}/tb/cur_cost'.format(self.save_path))
+        search_best_cost_writer = SummaryWriter(log_dir='{}/tb/best_cost'.format(self.save_path))
+        search_loss_writer = SummaryWriter(log_dir='{}/tb/loss'.format(self.save_path))
+
+
+        ######################## RANDOM VALID MAPPING ########################
+
+        print("Thread {0} Initializing ...".format(threadID, benchmarking, reproduce))
+        start_time = time.time()
+        # generate a random valid mapping for the problem and flatten it
+        mapping, reference_cost = self.costmodel.getMapCost(threadID=threadID, metric=self.parameters.COST_METRIC)
+
+        # Get the theoretical lower bound
+        oracle_cost = self.costmodel.getOracleCost(metric=self.parameters.COST_METRIC)
+
+        # Save the best mapping/cost as a result
+        best_mapping = mapping
+        best_cost = reference_cost/oracle_cost
+            # Result array will only have ground truth (to report final results - In practice, only use surrogate's prediction to drive the search)
+            # optimize_time_series = [best_cost,]
+        cur_cost_array = [best_cost, ]
+        best_cost_array = [best_cost, ]
+        # hyperparameters are not trainable.
+
+        # Output (Denormalize)
+        # cost = searchutils.getCost(out.data.cpu().numpy(), metric=self.parameters.COST_METRIC)
+
+        ######################## INITIALIZE ########################
+        iterations = 0
+
+        ######################## SEARCH PROCEDURE ########################
+        print("\n\nThread {0} Starting the run ...".format(threadID))
+        while(iterations < maxsteps):
+            print("\n------------------------- Iteration %d --------------------------" % iterations)
+            ######################## RANDOM RESTARTS ########################
+            # new_mapping, reference_cost = self.costmodel.getMapCost(metric=self.parameters.COST_METRIC, threadID=threadID)
+            new_mapping = self.costmodel.getMapping()
+            # For debug
+            iterations += 1
+
+            # Result array will only have ground truth (to report final results - In practice, only use surrogate's prediction to drive the search)
+            reference_cost = self.costmodel.costFn(new_mapping, metric=self.parameters.COST_METRIC, threadID=threadID)[0]/oracle_cost
+            best_cost_array.append(min(min(best_cost_array), reference_cost))  #min(min) WTF ?
+            # print("Cur Cost: {0}d".format(reference_cost ))
+            cur_cost_array.append(reference_cost)
+
+        print("\n\nThread {0} Completed ...".format(threadID))
+        return [best_cost_array, cur_cost_array]
 
     def run_nn_unpack(self, args):
         return self.run_nn(*args)
@@ -360,20 +426,21 @@ class Tuner:
 
 if __name__ == '__main__':
 
-
-    import argparse
-    from mindmappings.costModel.timeloop.model_timeloop import TimeloopModel
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--algorithm", default='CNN-layer', required=False)
-    parser.add_argument("--metric", default='EDP', required=False)
-    parser.add_argument("--path", default='../saved_models_final/', required=False)
-    parser.add_argument("--maxsteps", default=1000, required=False, type=int)
-    # parser.add_argument("--problem", help="Enter the problem dimensions", nargs='+', default=[16,256,256,3,3,14,14], type=int)
-    parser.add_argument("--problem", help="Enter the problem dimensions", nargs='+', default=[32, 64,192,3,3,56,56], type=int)
-    args = parser.parse_args()
-
-    params = Parameters(args.algorithm)
-    costmodel = TimeloopModel(problem=args.problem, algorithm=args.algorithm, parameters=params)
-    tuner = Tuner(costmodel, parameters=params, dataset_path=None, saved_model_path=args.path)
-    tuner.search(maxsteps=args.maxsteps)
+    pass
+    # import argparse
+    # from mindmappings.costModel.timeloop.model_timeloop import TimeloopModel
+    #
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--algorithm", default='CNN-layer', required=False)
+    # parser.add_argument("--metric", default='EDP', required=False)
+    # parser.add_argument("--path", default='../saved_models_final/', required=False)
+    # parser.add_argument("--maxsteps", default=1000, required=False, type=int)
+    # # parser.add_argument("--problem", help="Enter the problem dimensions", nargs='+', default=[16,256,256,3,3,14,14], type=int)
+    # # parser.add_argument("--problem", help="Enter the problem dimensions", nargs='+', default=[32, 64,192,3,3,56,56], type=int)
+    # parser.add_argument("--problem", help="Enter the problem dimensions", nargs='+', default=[16, 64,128,3,3,112,112], type=int)
+    # args = parser.parse_args()
+    #
+    # params = Parameters(args.algorithm)
+    # costmodel = TimeloopModel(problem=args.problem, algorithm=args.algorithm, parameters=params)
+    # tuner = Tuner(costmodel, parameters=params, dataset_path=None, saved_model_path=args.path)
+    # tuner.search(maxsteps=args.maxsteps)

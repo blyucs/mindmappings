@@ -23,6 +23,7 @@ from torch.utils.tensorboard import SummaryWriter
 def search_unpack(args):
     kwargs, obj = args
     return obj.search(**kwargs)
+    # return obj.random_search(**kwargs)
 
 def main(args):
     """ Main Function """
@@ -58,10 +59,10 @@ def main(args):
         datagen_path = args.path if(args.path!=None) else parameters.DATASET_UNPROCESSED_PATH
         if(not os.path.isdir(datagen_path)):
             os.mkdir(datagen_path)
-        print("\n\nLaunching Data Gen. Writing to {0}".format(datagen_path))
+        logging.info("\n\nLaunching Data Gen. Writing to {0}".format(datagen_path))
         datagen = DataGen(Model, parameters=parameters, path=datagen_path)
         datagen.run()
-        print("\n\n Done!")
+        logging.info("\n\n Done!")
 
     # Data processing
     elif(args.command == 'dataprocess'):
@@ -73,11 +74,11 @@ def main(args):
         # Output path
         if(not os.path.isdir(data_path)):
             os.mkdir(data_path)
-        print("\n\nLaunching Data Process. Writing to {0}".format(data_path))
+        logging.info("\n\nLaunching Data Process. Writing to {0}".format(data_path))
         preprocess = DataProcess(parameters=parameters, path=datagen_path, out_path=data_path)
         preprocess.run()
         shutil.move(data_path+ '/' + parameters.MEANSTD+'.npy', data_path + '/' + parameters.MEANSTD)
-        print("\n\nDone!")
+        logging.info("\n\nDone!")
 
     # Training
     elif(args.command == 'train'):
@@ -107,7 +108,7 @@ def main(args):
     elif(args.command == 'reproduce'):
         assert args.costmodel == 'timeloop', "Timeloop cost model was used in the paper."
         
-        print("This will reproduce similar results from the paper for {0}.\
+        logging.info("This will reproduce similar results from the paper for {0}.\
                 \nRunning the following problems {1}. \n\n See parameters.py if you would like to change something.\n\
                 \nNOTE: This run takes longer since we will plot results with ground truth for every step, hence actual cost model (timeloop) is invoked every step. \
                 \nIn practice, this is not necessary and search is blazing fast (try search command)\n"\
@@ -119,7 +120,7 @@ def main(args):
             os.mkdir(reproduce_dir)
 
         outfile = reproduce_dir + str(parameters.ALGORITHM) + '_' + str(parameters.AVG_ITERS)  + '_iter_' + str(parameters.MAXSTEPS) + '_steps_'+ 'dataGSearch_isoiter' + '.npy'
-        print("Writing to ", outfile)
+        logging.info("Writing to {}".format(outfile))
 
         # Placeholders
         work = []
@@ -129,7 +130,8 @@ def main(args):
         for pid,problem in enumerate(parameters.problems): 
 
             # Instantiate the cost model
-            costmodel = deepcopy(Model(problem=args.problem, algorithm=args.algorithm, parameters=parameters))
+            # costmodel = deepcopy(Model(problem=args.problem, algorithm=args.algorithm, parameters=parameters)) # bug
+            costmodel = deepcopy(Model(problem = problem, algorithm=args.algorithm, parameters=parameters))
             # Instantiate Tuner
             tuner = deepcopy(Tuner(costmodel, parameters=parameters, dataset_path=None, saved_model_path=args.path, save_path=args.save))
             # Arguments for every call
@@ -138,7 +140,7 @@ def main(args):
             work = work + work_problem
 
         # Total Amount of threads
-        print("We will launch {0} total threads.".format(len(work)))
+        logging.info("We will launch {0} total threads.".format(len(work)))
         # Launch them in parallel (uses maximum available cores/GPU)
         # [best_cost_array, cur_cost_array] = parallelProcess(search_unpack, work, num_cores=8)
         para_array= parallelProcess(search_unpack, work, num_cores=20)
@@ -166,7 +168,7 @@ def main(args):
         plot_result(average_best_cost, title="average best", dir = reproduce_dir)
         plot_result(average_cur_cost, title="average cur", dir = reproduce_dir)
         # plot_result(processed_average_cost, title="processed_average", dir = reproduce_dir)
-        print("Iso-iteration Runs Completed. Results written to {0}".format(parameters.GSEARCH_OUTPATH))
+        logging.info("Iso-iteration Runs Completed. Results written to {0}".format(parameters.GSEARCH_OUTPATH))
 
         average_best_cost_writer = SummaryWriter(log_dir='{}/tb/average_best_cost'.format(args.save))
         average_cur_cost_writer = SummaryWriter(log_dir='{}/tb/average_cur_cost'.format(args.save))
@@ -189,12 +191,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-a", "--algorithm", help="CNN-layer or MTTKRP", default='CNN-layer')
-    parser.add_argument("--problem", help="Enter the problem dimensions", nargs='+', default=[16,256,256,3,3,14,14], type=int)
+    # parser.add_argument("--problem", help="Enter the problem dimensions", nargs='+', default=[16,256,256,3,3,14,14], type=int)  # only in search , not in reproduce
+    parser.add_argument("--problem", help="Enter the problem dimensions", nargs='+', default=[16, 64,128,3,3,112,112], type=int)  # only in search , not in reproduce
     parser.add_argument("--costmodel", help="example or timeloop", default='timeloop')
     parser.add_argument("-c", "--command", help="datagen or dataprocess or train or search", required=True)
     parser.add_argument("-p", "--path", help="Path to store results in", default=None)
     parser.add_argument("--avg_runs", help="Number of average runs", default=1, type=int)
-    parser.add_argument("--maxsteps", help="Number of steps", default=10, type=int)
+    parser.add_argument("--maxsteps", help="Number of steps", default=5000, type=int)
     args = parser.parse_args()
 
     # Run

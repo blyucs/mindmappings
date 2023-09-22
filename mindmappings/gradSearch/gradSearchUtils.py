@@ -51,6 +51,9 @@ class GsearchUtils:
         metric = metric if(metric!=None) else self.parameters.COST_METRIC
         # Denoirmalize the array
         arr = self.denormalize(arr, self.otpminmax)
+        if arr[-1] < 0 or arr[-2] < 0:
+            print("======arr[-1] {0}, arr[-2] {1}=======".format(arr[-1], arr[-2]))
+
         # Call the cost function
         return self.costmodel.getOutputCost(arr, metric=metric)
 
